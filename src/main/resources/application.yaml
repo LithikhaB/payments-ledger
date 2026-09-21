@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: payments-ledger
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ledger
+    username: ledger
+    password: ledger
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none            # Flyway owns the schema
+    properties:
+      hibernate:
+        order_updates: true     # consistent row-update order -> fewer deadlocks
+        jdbc:
+          time_zone: UTC
+  mvc:
+    problemdetails:
+      enabled: true             # validation / missing-header errors come back as RFC 7807 problem+json
