@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ledger — payments-ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper: #fbfbf8;
+    --paper-alt: #f1efe7;
+    --ink: #1d2233;
+    --ink-soft: #565b6b;
+    --rule: #d9d6c9;
+    --credit: #1f6e52;
+    --debit: #8a4030;
+    --accent: #2c4a86;
+    --danger: #9b3b3b;
+    --danger-bg: #f7ecea;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0;
+  }
+  body { padding: 32px 20px 80px; }
+  .page { max-width: 980px; margin: 0 auto; }
+  h1, h2 {
+    font-family: "Spectral", Georgia, serif;
+    font-weight: 600;
+    margin: 0;
+    color: var(--ink);
+  }
+  header.top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+  header.top h1 { font-size: 26px; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-soft); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rule); }
+  .dot.up { background: var(--credit); }
+  .dot.down { background: var(--danger); }
+  .subtitle { color: var(--ink-soft); margin: 0 0 32px; max-width: 62ch; }
+  .note {
+    border-left: 3px solid var(--rule);
+    padding: 8px 14px;
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    margin: 0 0 32px;
+    max-width: 62ch;
+  }
+
+  section { margin-bottom: 44px; }
+  section > h2 { font-size: 18px; margin-bottom: 4px; }
+  section > p.hint { color: var(--ink-soft); font-size: 12.5px; margin: 0 0 16px; }
+
+  .desk {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 820px) { .desk { grid-template-columns: 1fr; } }
+
+  .voucher {
+    border: 1px solid var(--rule);
+    background: var(--paper-alt);
+    padding: 18px;
+  }
+  .voucher h3 {
+    font-family: "Spectral", Georgia, serif;
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 14px;
+  }
+  label {
+    display: block;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    margin: 12px 0 4px;
+  }
+  label:first-of-type { margin-top: 0; }
+  input, select {
+    width: 100%;
+    font: inherit;
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 7px 8px;
+  }
+  input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .key-row { display: flex; gap: 6px; align-items: center; }
+  .key-row input { flex: 1; font-size: 11.5px; }
+  .key-row button {
+    background: none;
+    border: 1px solid var(--rule);
+    color: var(--ink-soft);
+    font-size: 11px;
+    padding: 7px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .key-row button:hover { border-color: var(--ink-soft); color: var(--ink); }
+
+  button.submit {
+    width: 100%;
+    margin-top: 16px;
+    background: var(--ink);
+    color: var(--paper);
+    border: 1px solid var(--ink);
+    padding: 9px 10px;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  button.submit:hover { background: var(--accent); border-color: var(--accent); }
+  button.submit:disabled { opacity: 0.5; cursor: default; background: var(--ink); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--rule);
+    font-size: 13px;
+  }
+  th {
+    font-size: 11px;
+    color: var(--ink-soft);
+    font-weight: 500;
+    border-bottom: 1px solid var(--ink);
+  }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.id { color: var(--ink-soft); cursor: help; }
+  tr.credit-row td.num.balance { color: var(--credit); }
+  tr.empty td { color: var(--ink-soft); font-style: italic; border-bottom: none; }
+  .badge { font-size: 10.5px; padding: 1px 6px; border: 1px solid var(--rule); color: var(--ink-soft); }
+  .badge.replayed { border-color: var(--accent); color: var(--accent); }
+
+  @keyframes settle {
+    from { background: #e4ecdf; }
+    to { background: transparent; }
+  }
+  tr.just-posted { animation: settle 1.6s ease-out; }
+
+  .bar {
+    display: none;
+    border: 1px solid var(--rule);
+    padding: 10px 14px;
+    font-size: 12.5px;
+    margin-bottom: 24px;
+  }
+  .bar.show { display: block; }
+  .bar.ok { border-color: var(--credit); color: var(--credit); background: #f0f6f2; }
+  .bar.err { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+
+  @media (prefers-reduced-motion: reduce) {
+    tr.just-posted { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="top">
+    <h1>Ledger</h1>
+    <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">checking API…</span></div>
+  </header>
+  <p class="subtitle">A register for the payments-ledger API — open accounts, record deposits, and post transfers.</p>
+  <p class="note">This page keeps its own record of what you create here; the API only looks accounts and transfers up by id, so nothing is reloaded from the server on refresh.</p>
+
+  <div id="bar" class="bar"></div>
+
+  <section>
+    <h2>Post an entry</h2>
+    <div class="desk">
+
+      <form class="voucher" id="accountForm">
+        <h3>Open account</h3>
+        <label for="acctOwner">Owner name</label>
+        <input id="acctOwner" required maxlength="100" placeholder="Enter your Name" />
+        <label for="acctCurrency">Currency</label>
+        <select id="acctCurrency">
+          <option value="INR">INR</option>
+          <option value="USD">USD</option>
+        </select>
+        <button class="submit" type="submit">Open account</button>
+      </form>
+
+      <form class="voucher" id="depositForm">
+        <h3>Record deposit</h3>
+        <label for="depAccount">Into account</label>
+        <select id="depAccount" required></select>
+        <label for="depAmount">Amount</label>
+        <input id="depAmount" type="number" step="0.01" min="0.01" required placeholder="1000.00" />
+        <label for="depKey">Idempotency key</label>
+        <div class="key-row">
+          <input id="depKey" />
+          <button type="button" data-regen="depKey">new key</button>
+        </div>
+        <button class="submit" type="submit">Record deposit</button>
+      </form>
+
+      <form class="voucher" id="transferForm">
+        <h3>Post transfer</h3>
+        <label for="trFrom">From account</label>
+        <select id="trFrom" required></select>
+        <label for="trTo">To account</label>
+        <select id="trTo" required></select>
+        <label for="trAmount">Amount</label>
+        <input id="trAmount" type="number" step="0.01" min="0.01" required placeholder="250.00" />
+        <label for="trKey">Idempotency key</label>
+        <div class="key-row">
+          <input id="trKey" />
+          <button type="button" data-regen="trKey">new key</button>
+        </div>
+        <button class="submit" type="submit">Post transfer</button>
+      </form>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Accounts</h2>
+    <p class="hint">Opened this session, balances shown in major units.</p>
+    <table>
+      <thead><tr><th>Owner</th><th>Currency</th><th class="num">Balance</th><th>Account id</th></tr></thead>
+      <tbody id="accountsBody"><tr class="empty"><td colspan="4">No accounts opened yet.</td></tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Transfers</h2>
+    <p class="hint">Posted this session, most recent first.</p>
+    <table>
+      <thead><tr><th>From</th><th>To</th><th class="num">Amount</th><th>Status</th><th>Transfer id</th></tr></thead>
+      <tbody id="transfersBody"><tr class="empty"><td colspan="5">No transfers posted yet.</td></tr></tbody>
+    </table>
+  </section>
+
+</div>
+
+<script>
+  const API = "/api/v1";
+  const accounts = new Map();   // id -> {id, ownerName, currency, balance}
+  const transfers = [];         // newest first
+
+  const $ = (id) => document.getElementById(id);
+  const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+  const money = (minorUnits, currency) => (minorUnits / 100).toFixed(2) + " " + currency;
+  const short = (id) => id.slice(0, 8) + "…";
+
+  $("depKey").value = newKey();
+  $("trKey").value = newKey();
+  document.querySelectorAll("[data-regen]").forEach(btn => {
+    btn.addEventListener("click", () => { $(btn.dataset.regen).value = newKey(); });
+  });
+
+  function showBar(message, ok) {
+    const bar = $("bar");
+    bar.textContent = message;
+    bar.className = "bar show " + (ok ? "ok" : "err");
+  }
+
+  async function api(method, path, body, idempotencyKey) {
+    const headers = { "Content-Type": "application/json" };
+    if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+    const res = await fetch(API + path, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data = null;
+    try { data = await res.json(); } catch (_) { /* no body */ }
+    if (!res.ok) {
+      const detail = (data && (data.detail || data.title)) || res.statusText || "Request failed";
+      const err = new Error(detail);
+      err.status = res.status;
+      throw err;
+    }
+    return { data, status: res.status, headers: res.headers };
+  }
+
+  function renderAccountOptions() {
+    for (const sel of [$("depAccount"), $("trFrom"), $("trTo")]) {
+      const prev = sel.value;
+      sel.innerHTML = "";
+      for (const a of accounts.values()) {
+        const opt = document.createElement("option");
+        opt.value = a.id;
+        opt.textContent = `${a.ownerName} — ${a.currency} (${short(a.id)})`;
+        sel.appendChild(opt);
+      }
+      if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+    }
+  }
+
+  function renderAccountsTable() {
+    const body = $("accountsBody");
+    if (accounts.size === 0) {
+      body.innerHTML = '<tr class="empty"><td colspan="4">No accounts opened yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = "";
+    for (const a of accounts.values()) {
+      const tr = document.createElement("tr");
+      tr.dataset.acct = a.id;
+      tr.innerHTML = `
+        <td>${a.ownerName}</td>
+        <td>${a.currency}</td>
+        <td class="num balance">${money(a.balance, a.currency)}</td>
+        <td class="id" title="${a.id}">${short(a.id)}</td>`;
+      body.appendChild(tr);
+    }
+  }
+
+  function renderTransfersTable() {
+    const body = $("transfersBody");
+    if (transfers.length === 0) {
+      body.innerHTML = '<tr class="empty"><td colspan="5">No transfers posted yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = "";
+    for (const t of transfers) {
+      const tr = document.createElement("tr");
+      if (t.fresh) { tr.classList.add("just-posted"); t.fresh = false; }
+      const fromAcct = accounts.get(t.fromAccountId);
+      const toAcct = accounts.get(t.toAccountId);
+      tr.innerHTML = `
+        <td>${fromAcct ? fromAcct.ownerName : short(t.fromAccountId)}</td>
+        <td>${toAcct ? toAcct.ownerName : short(t.toAccountId)}</td>
+        <td class="num">${money(t.amount, t.currency)}</td>
+        <td><span class="badge ${t.replayed ? "replayed" : ""}">${t.replayed ? "replayed" : "posted"}</span></td>
+        <td class="id" title="${t.id}">${short(t.id)}</td>`;
+      body.appendChild(tr);
+    }
+  }
+
+  async function refreshBalance(id) {
+    const { data } = await api("GET", `/accounts/${id}`);
+    accounts.set(id, data);
+  }
+
+  $("accountForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector("button.submit");
+    btn.disabled = true;
+    try {
+      const { data } = await api("POST", "/accounts", {
+        ownerName: $("acctOwner").value.trim(),
+        currency: $("acctCurrency").value,
+      });
+      accounts.set(data.id, data);
+      renderAccountOptions();
+      renderAccountsTable();
+      $("acctOwner").value = "";
+      showBar(`Opened account for ${data.ownerName}.`, true);
+    } catch (err) {
+      showBar(err.message, false);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $("depositForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector("button.submit");
+    const accountId = $("depAccount").value;
+    if (!accountId) { showBar("Open an account first.", false); return; }
+    btn.disabled = true;
+    try {
+      const amountMinor = Math.round(parseFloat($("depAmount").value) * 100);
+      await api("POST", `/accounts/${accountId}/deposits`, { amount: amountMinor }, $("depKey").value);
+      await refreshBalance(accountId);
+      renderAccountsTable();
+      $("depAmount").value = "";
+      $("depKey").value = newKey();
+      showBar("Deposit recorded.", true);
+    } catch (err) {
+      showBar(err.message, false);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $("transferForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector("button.submit");
+    const fromId = $("trFrom").value, toId = $("trTo").value;
+    if (!fromId || !toId) { showBar("Open at least two accounts first.", false); return; }
+    if (fromId === toId) { showBar("From and to accounts must differ.", false); return; }
+    btn.disabled = true;
+    try {
+      const fromAcct = accounts.get(fromId);
+      const amountMinor = Math.round(parseFloat($("trAmount").value) * 100);
+      const { data, headers } = await api("POST", "/transfers", {
+        fromAccountId: fromId,
+        toAccountId: toId,
+        amount: amountMinor,
+        currency: fromAcct.currency,
+      }, $("trKey").value);
+      data.replayed = headers.get("Idempotent-Replayed") === "true";
+      data.fresh = true;
+      transfers.unshift(data);
+      await Promise.all([refreshBalance(fromId), refreshBalance(toId)]);
+      renderAccountsTable();
+      renderTransfersTable();
+      $("trAmount").value = "";
+      $("trKey").value = newKey();
+      showBar(data.replayed ? "Transfer replayed — no balances moved again." : "Transfer posted.", true);
+    } catch (err) {
+      showBar(err.message, false);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  (async function ping() {
+    try {
+      const res = await fetch(API.replace("/api/v1", "") + "/v3/api-docs", { method: "GET" });
+      $("statusDot").classList.add(res.ok ? "up" : "down");
+      $("statusText").textContent = res.ok ? "API reachable" : "API returned an error";
+    } catch (_) {
+      $("statusDot").classList.add("down");
+      $("statusText").textContent = "API unreachable — is the app running on :8080?";
+    }
+  })();
+</script>
+</body>
+</html>
